@@ -35,10 +35,10 @@ class DiagnosticEvent(models.Model):
     event_type = models.CharField(_("事件类型"), max_length=64, db_index=True)
     root_pipeline_id = models.CharField(_("根 Pipeline ID"), max_length=64, db_index=True)
     node_id = models.CharField(_("节点ID"), max_length=64, blank=True, default="", db_index=True)
-    process_id = models.IntegerField(_("进程ID"), null=True, blank=True, db_index=True)
+    process_id = models.BigIntegerField(_("进程ID"), null=True, blank=True, db_index=True)
     version = models.CharField(_("节点版本"), max_length=64, blank=True, default="")
-    schedule_id = models.IntegerField(_("调度ID"), null=True, blank=True, db_index=True)
-    callback_data_id = models.IntegerField(_("回调数据ID"), null=True, blank=True, db_index=True)
+    schedule_id = models.BigIntegerField(_("调度ID"), null=True, blank=True, db_index=True)
+    callback_data_id = models.BigIntegerField(_("回调数据ID"), null=True, blank=True, db_index=True)
     result = models.CharField(_("事件结果"), max_length=32, blank=True, default="", db_index=True)
     reason = models.TextField(_("诊断原因"), blank=True, default="")
     duration = models.FloatField(_("持续时间"), null=True, blank=True)
@@ -111,15 +111,12 @@ class DiagnosticCase(models.Model):
 
 
 class DiagnosticOperationAudit(models.Model):
-    OPERATION_TYPE_RETRY = "retry"
-    OPERATION_TYPE_RESUME = "resume"
+    OPERATION_TYPE_REPLAY_CALLBACK_DATA = "replay_callback_data"
+    OPERATION_TYPE_RESEND_SCHEDULE = "resend_schedule"
+    OPERATION_TYPE_EXPIRE_STALE_SCHEDULE = "expire_stale_schedule"
+    OPERATION_TYPE_INSPECT_ACK_CONVERGE = "inspect_ack_converge"
+    OPERATION_TYPE_INSPECT_NODE_RUNTIME_READINESS = "inspect_node_runtime_readiness"
     OPERATION_TYPE_IGNORE = "ignore"
-
-    OPERATION_TYPE_CHOICES = (
-        (OPERATION_TYPE_RETRY, _("重试")),
-        (OPERATION_TYPE_RESUME, _("恢复")),
-        (OPERATION_TYPE_IGNORE, _("忽略")),
-    )
 
     MODE_DRY_RUN = "dry_run"
     MODE_APPLY = "apply"
@@ -142,7 +139,7 @@ class DiagnosticOperationAudit(models.Model):
     case = models.ForeignKey(
         DiagnosticCase, verbose_name=_("诊断案例"), related_name="operation_audits", on_delete=models.CASCADE
     )
-    operation_type = models.CharField(_("操作类型"), max_length=32, choices=OPERATION_TYPE_CHOICES, db_index=True)
+    operation_type = models.CharField(_("操作类型"), max_length=64, db_index=True)
     target_object = JSONTextField(_("操作对象"), default=dict)
     operator = models.CharField(_("操作人"), max_length=64)
     mode = models.CharField(_("操作模式"), max_length=32, choices=MODE_CHOICES, default=MODE_DRY_RUN, db_index=True)

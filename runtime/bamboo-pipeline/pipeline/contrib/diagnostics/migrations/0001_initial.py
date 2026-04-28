@@ -22,12 +22,12 @@ class Migration(migrations.Migration):
                     "node_id",
                     models.CharField(blank=True, db_index=True, default="", max_length=64, verbose_name="节点ID"),
                 ),
-                ("process_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="进程ID")),
+                ("process_id", models.BigIntegerField(blank=True, db_index=True, null=True, verbose_name="进程ID")),
                 ("version", models.CharField(blank=True, default="", max_length=64, verbose_name="节点版本")),
-                ("schedule_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="调度ID")),
+                ("schedule_id", models.BigIntegerField(blank=True, db_index=True, null=True, verbose_name="调度ID")),
                 (
                     "callback_data_id",
-                    models.IntegerField(blank=True, db_index=True, null=True, verbose_name="回调数据ID"),
+                    models.BigIntegerField(blank=True, db_index=True, null=True, verbose_name="回调数据ID"),
                 ),
                 (
                     "result",
@@ -127,9 +127,8 @@ class Migration(migrations.Migration):
                 (
                     "operation_type",
                     models.CharField(
-                        choices=[("retry", "重试"), ("resume", "恢复"), ("ignore", "忽略")],
                         db_index=True,
-                        max_length=32,
+                        max_length=64,
                         verbose_name="操作类型",
                     ),
                 ),

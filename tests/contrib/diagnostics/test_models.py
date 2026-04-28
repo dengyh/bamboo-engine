@@ -54,6 +54,9 @@ class DiagnosticsModelTestCase(TransactionTestCase):
         self.assertEqual(loaded.duration, 120.5)
         self.assertEqual(loaded.engine_version, "3.24.10")
         self.assertEqual(loaded.payload, {"doctor": "zombie"})
+        self.assertEqual(DiagnosticEvent._meta.get_field("process_id").get_internal_type(), "BigIntegerField")
+        self.assertEqual(DiagnosticEvent._meta.get_field("schedule_id").get_internal_type(), "BigIntegerField")
+        self.assertEqual(DiagnosticEvent._meta.get_field("callback_data_id").get_internal_type(), "BigIntegerField")
 
     def test_create_diagnostic_case(self):
         first_seen_at = timezone.now()
@@ -107,7 +110,7 @@ class DiagnosticsModelTestCase(TransactionTestCase):
         )
         audit = DiagnosticOperationAudit.objects.create(
             case=case,
-            operation_type=DiagnosticOperationAudit.OPERATION_TYPE_RESUME,
+            operation_type=DiagnosticOperationAudit.OPERATION_TYPE_REPLAY_CALLBACK_DATA,
             target_object={"process_id": 3},
             operator="admin",
             mode=DiagnosticOperationAudit.MODE_APPLY,
@@ -120,7 +123,7 @@ class DiagnosticsModelTestCase(TransactionTestCase):
         loaded = DiagnosticOperationAudit.objects.get(id=audit.id)
 
         self.assertEqual(loaded.case_id, case.id)
-        self.assertEqual(loaded.operation_type, DiagnosticOperationAudit.OPERATION_TYPE_RESUME)
+        self.assertEqual(loaded.operation_type, DiagnosticOperationAudit.OPERATION_TYPE_REPLAY_CALLBACK_DATA)
         self.assertEqual(loaded.target_object, {"process_id": 3})
         self.assertEqual(loaded.operator, "admin")
         self.assertEqual(loaded.mode, DiagnosticOperationAudit.MODE_APPLY)
@@ -132,3 +135,49 @@ class DiagnosticsModelTestCase(TransactionTestCase):
             [DiagnosticOperationAudit.MODE_DRY_RUN, DiagnosticOperationAudit.MODE_APPLY],
             ["dry_run", "apply"],
         )
+        self.assertEqual(
+            [
+                DiagnosticOperationAudit.OPERATION_TYPE_REPLAY_CALLBACK_DATA,
+                DiagnosticOperationAudit.OPERATION_TYPE_RESEND_SCHEDULE,
+                DiagnosticOperationAudit.OPERATION_TYPE_EXPIRE_STALE_SCHEDULE,
+                DiagnosticOperationAudit.OPERATION_TYPE_INSPECT_ACK_CONVERGE,
+                DiagnosticOperationAudit.OPERATION_TYPE_INSPECT_NODE_RUNTIME_READINESS,
+                DiagnosticOperationAudit.OPERATION_TYPE_IGNORE,
+            ],
+            [
+                "replay_callback_data",
+                "resend_schedule",
+                "expire_stale_schedule",
+                "inspect_ack_converge",
+                "inspect_node_runtime_readiness",
+                "ignore",
+            ],
+        )
+
+    def test_create_diagnostic_operation_audit_with_custom_operation_type(self):
+        first_seen_at = timezone.now()
+        case = DiagnosticCase.objects.create(
+            root_pipeline_id="root-pipeline-4",
+            node_id="node-4",
+            stuck_type="unknown",
+            status=DiagnosticCase.STATUS_IGNORED,
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+        )
+        audit = DiagnosticOperationAudit(
+            case=case,
+            operation_type="custom_operation_type",
+            target_object={"node_id": "node-4"},
+            operator="admin",
+            mode=DiagnosticOperationAudit.MODE_DRY_RUN,
+            precheck_result={"passed": True},
+            result={"ok": True},
+            payload={"reason": "manual inspection"},
+        )
+
+        audit.full_clean(exclude=["target_object", "precheck_result", "result", "payload"])
+        audit.save()
+
+        loaded = DiagnosticOperationAudit.objects.get(id=audit.id)
+
+        self.assertEqual(loaded.operation_type, "custom_operation_type")
