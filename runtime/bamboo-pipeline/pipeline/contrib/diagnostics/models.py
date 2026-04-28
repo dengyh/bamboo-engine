@@ -32,6 +32,7 @@ class JSONTextField(models.TextField):
 
 
 class DiagnosticEvent(models.Model):
+    id = models.BigAutoField(_("ID"), primary_key=True)
     event_type = models.CharField(_("事件类型"), max_length=64, db_index=True)
     root_pipeline_id = models.CharField(_("根 Pipeline ID"), max_length=64, db_index=True)
     node_id = models.CharField(_("节点ID"), max_length=64, blank=True, default="", db_index=True)
@@ -58,6 +59,8 @@ class DiagnosticEvent(models.Model):
 
 
 class DiagnosticCase(models.Model):
+    id = models.BigAutoField(_("ID"), primary_key=True)
+
     STATUS_OPEN = "open"
     STATUS_RESOLVED = "resolved"
     STATUS_IGNORED = "ignored"
@@ -105,12 +108,15 @@ class DiagnosticCase(models.Model):
         verbose_name_plural = _("Pipeline诊断案例")
         ordering = ["-id"]
         index_together = (("root_pipeline_id", "node_id", "stuck_type", "status"), ("status", "severity"))
+        unique_together = (("root_pipeline_id", "node_id", "stuck_type", "status"),)
 
     def __unicode__(self):
         return "{}_{}_{}_{}".format(self.root_pipeline_id, self.node_id, self.stuck_type, self.status)
 
 
 class DiagnosticOperationAudit(models.Model):
+    id = models.BigAutoField(_("ID"), primary_key=True)
+
     OPERATION_TYPE_REPLAY_CALLBACK_DATA = "replay_callback_data"
     OPERATION_TYPE_RESEND_SCHEDULE = "resend_schedule"
     OPERATION_TYPE_EXPIRE_STALE_SCHEDULE = "expire_stale_schedule"

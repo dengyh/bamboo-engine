@@ -11,18 +11,30 @@ class DiagnosticsModelTestCase(TransactionTestCase):
     @classmethod
     def setUpClass(cls):
         super(DiagnosticsModelTestCase, cls).setUpClass()
-        with connection.schema_editor() as schema_editor:
-            schema_editor.create_model(DiagnosticEvent)
-            schema_editor.create_model(DiagnosticCase)
-            schema_editor.create_model(DiagnosticOperationAudit)
+        cls._created_models = []
+        try:
+            with connection.schema_editor() as schema_editor:
+                existing_tables = connection.introspection.table_names()
+                for model in (DiagnosticEvent, DiagnosticCase, DiagnosticOperationAudit):
+                    if model._meta.db_table not in existing_tables:
+                        schema_editor.create_model(model)
+                        cls._created_models.append(model)
+        except Exception:
+            cls._delete_created_models()
+            raise
 
     @classmethod
     def tearDownClass(cls):
-        with connection.schema_editor() as schema_editor:
-            schema_editor.delete_model(DiagnosticOperationAudit)
-            schema_editor.delete_model(DiagnosticCase)
-            schema_editor.delete_model(DiagnosticEvent)
+        cls._delete_created_models()
         super(DiagnosticsModelTestCase, cls).tearDownClass()
+
+    @classmethod
+    def _delete_created_models(cls):
+        with connection.schema_editor() as schema_editor:
+            for model in reversed(getattr(cls, "_created_models", [])):
+                if model._meta.db_table in connection.introspection.table_names():
+                    schema_editor.delete_model(model)
+        cls._created_models = []
 
     def test_create_diagnostic_event(self):
         event = DiagnosticEvent.objects.create(
@@ -57,6 +69,7 @@ class DiagnosticsModelTestCase(TransactionTestCase):
         self.assertEqual(DiagnosticEvent._meta.get_field("process_id").get_internal_type(), "BigIntegerField")
         self.assertEqual(DiagnosticEvent._meta.get_field("schedule_id").get_internal_type(), "BigIntegerField")
         self.assertEqual(DiagnosticEvent._meta.get_field("callback_data_id").get_internal_type(), "BigIntegerField")
+        self.assertEqual(DiagnosticEvent._meta.pk.get_internal_type(), "BigAutoField")
 
     def test_create_diagnostic_case(self):
         first_seen_at = timezone.now()
@@ -95,6 +108,11 @@ class DiagnosticsModelTestCase(TransactionTestCase):
             [DiagnosticCase.STATUS_OPEN, DiagnosticCase.STATUS_RESOLVED, DiagnosticCase.STATUS_IGNORED],
             ["open", "resolved", "ignored"],
         )
+        self.assertEqual(DiagnosticCase._meta.pk.get_internal_type(), "BigAutoField")
+        self.assertIn(
+            ("root_pipeline_id", "node_id", "stuck_type", "status"),
+            DiagnosticCase._meta.unique_together,
+        )
 
     def test_create_diagnostic_operation_audit(self):
         first_seen_at = timezone.now()
@@ -131,6 +149,7 @@ class DiagnosticsModelTestCase(TransactionTestCase):
         self.assertEqual(loaded.result, {"ok": True})
         self.assertEqual(loaded.risk_level, DiagnosticOperationAudit.RISK_LEVEL_HIGH)
         self.assertEqual(loaded.payload, {"ticket": "bk-1"})
+        self.assertEqual(DiagnosticOperationAudit._meta.pk.get_internal_type(), "BigAutoField")
         self.assertEqual(
             [DiagnosticOperationAudit.MODE_DRY_RUN, DiagnosticOperationAudit.MODE_APPLY],
             ["dry_run", "apply"],

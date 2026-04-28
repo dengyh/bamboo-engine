@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="DiagnosticEvent",
             fields=[
-                ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("id", models.BigAutoField(primary_key=True, serialize=False, verbose_name="ID")),
                 ("event_type", models.CharField(db_index=True, max_length=64, verbose_name="事件类型")),
                 ("root_pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="根 Pipeline ID")),
                 (
@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="DiagnosticCase",
             fields=[
-                ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("id", models.BigAutoField(primary_key=True, serialize=False, verbose_name="ID")),
                 ("root_pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="根 Pipeline ID")),
                 ("node_id", models.CharField(db_index=True, max_length=64, verbose_name="节点ID")),
                 ("stuck_type", models.CharField(db_index=True, max_length=64, verbose_name="卡住类型")),
@@ -118,12 +118,13 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Pipeline诊断案例",
                 "ordering": ["-id"],
                 "index_together": {("root_pipeline_id", "node_id", "stuck_type", "status"), ("status", "severity")},
+                "unique_together": {("root_pipeline_id", "node_id", "stuck_type", "status")},
             },
         ),
         migrations.CreateModel(
             name="DiagnosticOperationAudit",
             fields=[
-                ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("id", models.BigAutoField(primary_key=True, serialize=False, verbose_name="ID")),
                 (
                     "operation_type",
                     models.CharField(
