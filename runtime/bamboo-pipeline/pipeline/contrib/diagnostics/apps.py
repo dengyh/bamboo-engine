@@ -16,4 +16,5 @@ from django.apps import AppConfig
 
 class DiagnosticsConfig(AppConfig):
     name = "pipeline.contrib.diagnostics"
+    label = "pipeline_diagnostics"
     verbose_name = "PipelineContribDiagnostics"

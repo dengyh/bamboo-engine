@@ -13,6 +13,7 @@ specific language governing permissions and limitations under the License.
 
 import ujson as json
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 
 
@@ -31,57 +32,38 @@ class JSONTextField(models.TextField):
 
 
 class DiagnosticEvent(models.Model):
-    EVENT_TYPE_STUCK = "stuck"
-    EVENT_TYPE_EXCEPTION = "exception"
-
-    EVENT_TYPE_CHOICES = (
-        (EVENT_TYPE_STUCK, _("执行卡住")),
-        (EVENT_TYPE_EXCEPTION, _("执行异常")),
-    )
-
-    STATUS_PENDING = "pending"
-    STATUS_PROCESSING = "processing"
-    STATUS_PROCESSED = "processed"
-    STATUS_IGNORED = "ignored"
-
-    STATUS_CHOICES = (
-        (STATUS_PENDING, _("待处理")),
-        (STATUS_PROCESSING, _("处理中")),
-        (STATUS_PROCESSED, _("已处理")),
-        (STATUS_IGNORED, _("已忽略")),
-    )
-
-    event_id = models.CharField(_("诊断事件ID"), max_length=64, unique=True)
-    event_type = models.CharField(_("诊断事件类型"), max_length=32, choices=EVENT_TYPE_CHOICES, db_index=True)
-    source = models.CharField(_("诊断来源"), max_length=64)
-    pipeline_id = models.CharField(_("Pipeline ID"), max_length=64, db_index=True)
+    root_pipeline_id = models.CharField(_("根 Pipeline ID"), max_length=64, db_index=True)
     node_id = models.CharField(_("节点ID"), max_length=64, blank=True, default="", db_index=True)
-    process_id = models.IntegerField(_("进程ID"), null=True, blank=True, db_index=True)
-    status = models.CharField(_("处理状态"), max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
-    detail = JSONTextField(_("诊断详情"), default=dict)
+    version = models.CharField(_("节点版本"), max_length=64, blank=True, default="")
+    schedule_id = models.IntegerField(_("调度ID"), null=True, blank=True, db_index=True)
+    callback_data_id = models.IntegerField(_("回调数据ID"), null=True, blank=True, db_index=True)
+    result = models.BooleanField(_("诊断结果"), null=True, blank=True)
+    reason = models.TextField(_("诊断原因"), blank=True, default="")
+    duration = models.FloatField(_("持续时间"), null=True, blank=True)
+    engine_version = models.CharField(_("引擎版本"), max_length=64, blank=True, default="")
+    payload = JSONTextField(_("诊断载荷"), default=dict)
     created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, db_index=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
 
     class Meta:
-        app_label = "diagnostics"
+        app_label = "pipeline_diagnostics"
         verbose_name = _("Pipeline诊断事件")
         verbose_name_plural = _("Pipeline诊断事件")
         ordering = ["-id"]
-        index_together = (("pipeline_id", "node_id"), ("status", "created_at"))
+        index_together = (("root_pipeline_id", "node_id"), ("schedule_id", "callback_data_id"))
 
     def __unicode__(self):
-        return "{}_{}_{}".format(self.event_id, self.event_type, self.status)
+        return "{}_{}_{}".format(self.root_pipeline_id, self.node_id, self.result)
 
 
 class DiagnosticCase(models.Model):
     STATUS_OPEN = "open"
-    STATUS_HANDLED = "handled"
-    STATUS_CLOSED = "closed"
+    STATUS_RESOLVED = "resolved"
+    STATUS_IGNORED = "ignored"
 
     STATUS_CHOICES = (
         (STATUS_OPEN, _("待治理")),
-        (STATUS_HANDLED, _("已治理")),
-        (STATUS_CLOSED, _("已关闭")),
+        (STATUS_RESOLVED, _("已解决")),
+        (STATUS_IGNORED, _("已忽略")),
     )
 
     SEVERITY_INFO = "info"
@@ -94,65 +76,88 @@ class DiagnosticCase(models.Model):
         (SEVERITY_CRITICAL, _("严重")),
     )
 
-    case_id = models.CharField(_("诊断案例ID"), max_length=64, unique=True)
-    event = models.ForeignKey(DiagnosticEvent, verbose_name=_("诊断事件"), related_name="cases", on_delete=models.CASCADE)
-    pipeline_id = models.CharField(_("Pipeline ID"), max_length=64, db_index=True)
-    node_id = models.CharField(_("节点ID"), max_length=64, blank=True, default="", db_index=True)
-    process_id = models.IntegerField(_("进程ID"), null=True, blank=True, db_index=True)
-    status = models.CharField(_("治理状态"), max_length=32, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True)
-    severity = models.CharField(_("严重级别"), max_length=32, choices=SEVERITY_CHOICES, default=SEVERITY_INFO, db_index=True)
-    diagnosis = JSONTextField(_("诊断结论"), default=dict)
-    suggestion = JSONTextField(_("治理建议"), default=dict)
+    root_pipeline_id = models.CharField(_("根 Pipeline ID"), max_length=64, db_index=True)
+    node_id = models.CharField(_("节点ID"), max_length=64, db_index=True)
+    stuck_type = models.CharField(_("卡住类型"), max_length=64, db_index=True)
+    severity = models.CharField(
+        _("严重级别"), max_length=32, choices=SEVERITY_CHOICES, default=SEVERITY_INFO, db_index=True
+    )
+    confidence = models.FloatField(_("置信度"), default=0.0)
+    status = models.CharField(
+        _("治理状态"), max_length=32, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True
+    )
+    first_seen_at = models.DateTimeField(_("首次发现时间"), default=timezone.now, db_index=True)
+    last_seen_at = models.DateTimeField(_("最近发现时间"), default=timezone.now, db_index=True)
+    hit_count = models.IntegerField(_("命中次数"), default=1)
+    evidence = JSONTextField(_("证据"), default=dict)
+    related_objects = JSONTextField(_("关联对象"), default=dict)
+    recommended_actions = JSONTextField(_("推荐操作"), default=list)
+    forbidden_actions = JSONTextField(_("禁止操作"), default=list)
+    message = models.TextField(_("诊断信息"), blank=True, default="")
     created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
 
     class Meta:
-        app_label = "diagnostics"
+        app_label = "pipeline_diagnostics"
         verbose_name = _("Pipeline诊断案例")
         verbose_name_plural = _("Pipeline诊断案例")
         ordering = ["-id"]
-        index_together = (("pipeline_id", "node_id"), ("status", "severity"))
+        index_together = (("root_pipeline_id", "node_id", "stuck_type", "status"), ("status", "severity"))
 
     def __unicode__(self):
-        return "{}_{}_{}".format(self.case_id, self.status, self.severity)
+        return "{}_{}_{}_{}".format(self.root_pipeline_id, self.node_id, self.stuck_type, self.status)
 
 
 class DiagnosticOperationAudit(models.Model):
-    OPERATION_RETRY = "retry"
-    OPERATION_RESUME = "resume"
-    OPERATION_IGNORE = "ignore"
+    OPERATION_TYPE_RETRY = "retry"
+    OPERATION_TYPE_RESUME = "resume"
+    OPERATION_TYPE_IGNORE = "ignore"
 
-    OPERATION_CHOICES = (
-        (OPERATION_RETRY, _("重试")),
-        (OPERATION_RESUME, _("恢复")),
-        (OPERATION_IGNORE, _("忽略")),
+    OPERATION_TYPE_CHOICES = (
+        (OPERATION_TYPE_RETRY, _("重试")),
+        (OPERATION_TYPE_RESUME, _("恢复")),
+        (OPERATION_TYPE_IGNORE, _("忽略")),
     )
 
-    STATUS_SUCCESS = "success"
-    STATUS_FAILED = "failed"
+    MODE_DRY_RUN = "dry_run"
+    MODE_APPLY = "apply"
 
-    STATUS_CHOICES = (
-        (STATUS_SUCCESS, _("成功")),
-        (STATUS_FAILED, _("失败")),
+    MODE_CHOICES = (
+        (MODE_DRY_RUN, _("预检查")),
+        (MODE_APPLY, _("执行")),
+    )
+
+    RISK_LEVEL_LOW = "low"
+    RISK_LEVEL_MEDIUM = "medium"
+    RISK_LEVEL_HIGH = "high"
+
+    RISK_LEVEL_CHOICES = (
+        (RISK_LEVEL_LOW, _("低")),
+        (RISK_LEVEL_MEDIUM, _("中")),
+        (RISK_LEVEL_HIGH, _("高")),
     )
 
     case = models.ForeignKey(
         DiagnosticCase, verbose_name=_("诊断案例"), related_name="operation_audits", on_delete=models.CASCADE
     )
+    operation_type = models.CharField(_("操作类型"), max_length=32, choices=OPERATION_TYPE_CHOICES, db_index=True)
+    target_object = JSONTextField(_("操作对象"), default=dict)
     operator = models.CharField(_("操作人"), max_length=64)
-    operation = models.CharField(_("操作类型"), max_length=32, choices=OPERATION_CHOICES, db_index=True)
-    status = models.CharField(_("操作状态"), max_length=32, choices=STATUS_CHOICES, db_index=True)
-    request = JSONTextField(_("操作请求"), default=dict)
+    mode = models.CharField(_("操作模式"), max_length=32, choices=MODE_CHOICES, default=MODE_DRY_RUN, db_index=True)
+    precheck_result = JSONTextField(_("预检查结果"), default=dict)
     result = JSONTextField(_("操作结果"), default=dict)
-    message = models.TextField(_("操作信息"), blank=True, default="")
+    risk_level = models.CharField(
+        _("风险级别"), max_length=32, choices=RISK_LEVEL_CHOICES, default=RISK_LEVEL_LOW, db_index=True
+    )
+    payload = JSONTextField(_("操作载荷"), default=dict)
     created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, db_index=True)
 
     class Meta:
-        app_label = "diagnostics"
+        app_label = "pipeline_diagnostics"
         verbose_name = _("Pipeline诊断操作审计")
         verbose_name_plural = _("Pipeline诊断操作审计")
         ordering = ["-id"]
-        index_together = (("operator", "operation"), ("status", "created_at"))
+        index_together = (("operator", "operation_type"), ("mode", "created_at"))
 
     def __unicode__(self):
-        return "{}_{}_{}".format(self.case_id, self.operation, self.status)
+        return "{}_{}_{}".format(self.case_id, self.operation_type, self.mode)

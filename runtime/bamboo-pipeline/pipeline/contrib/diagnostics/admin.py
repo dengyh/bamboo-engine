@@ -18,20 +18,39 @@ from .models import DiagnosticCase, DiagnosticEvent, DiagnosticOperationAudit
 
 @admin.register(DiagnosticEvent)
 class DiagnosticEventAdmin(admin.ModelAdmin):
-    list_display = ("event_id", "event_type", "source", "pipeline_id", "node_id", "process_id", "status", "created_at")
-    search_fields = ("event_id", "pipeline_id", "node_id")
-    list_filter = ("event_type", "source", "status")
+    list_display = (
+        "id",
+        "root_pipeline_id",
+        "node_id",
+        "version",
+        "schedule_id",
+        "callback_data_id",
+        "result",
+        "created_at",
+    )
+    search_fields = ("root_pipeline_id", "node_id", "reason")
+    list_filter = ("result", "engine_version")
 
 
 @admin.register(DiagnosticCase)
 class DiagnosticCaseAdmin(admin.ModelAdmin):
-    list_display = ("case_id", "pipeline_id", "node_id", "process_id", "status", "severity", "created_at")
-    search_fields = ("case_id", "pipeline_id", "node_id")
-    list_filter = ("status", "severity")
+    list_display = (
+        "id",
+        "root_pipeline_id",
+        "node_id",
+        "stuck_type",
+        "severity",
+        "confidence",
+        "status",
+        "hit_count",
+        "last_seen_at",
+    )
+    search_fields = ("root_pipeline_id", "node_id", "stuck_type", "message")
+    list_filter = ("stuck_type", "status", "severity")
 
 
 @admin.register(DiagnosticOperationAudit)
 class DiagnosticOperationAuditAdmin(admin.ModelAdmin):
-    list_display = ("id", "case", "operator", "operation", "status", "created_at")
-    search_fields = ("case__case_id", "operator")
-    list_filter = ("operation", "status")
+    list_display = ("id", "case", "operation_type", "operator", "mode", "risk_level", "created_at")
+    search_fields = ("operator", "case__root_pipeline_id", "case__node_id")
+    list_filter = ("operation_type", "mode", "risk_level")

@@ -2,6 +2,7 @@
 
 from django.db import connection
 from django.test import TransactionTestCase
+from django.utils import timezone
 
 from pipeline.contrib.diagnostics.models import DiagnosticCase, DiagnosticEvent, DiagnosticOperationAudit
 
@@ -25,92 +26,105 @@ class DiagnosticsModelTestCase(TransactionTestCase):
 
     def test_create_diagnostic_event(self):
         event = DiagnosticEvent.objects.create(
-            event_id="event-1",
-            event_type=DiagnosticEvent.EVENT_TYPE_STUCK,
-            source="zombie_doctor",
-            pipeline_id="pipeline-1",
+            root_pipeline_id="root-pipeline-1",
             node_id="node-1",
-            process_id=1,
-            status=DiagnosticEvent.STATUS_PENDING,
-            detail={"reason": "stuck"},
+            version="v1",
+            schedule_id=1,
+            callback_data_id=2,
+            result=False,
+            reason="node schedule timeout",
+            duration=120.5,
+            engine_version="3.24.10",
+            payload={"doctor": "zombie"},
         )
 
         loaded = DiagnosticEvent.objects.get(id=event.id)
 
-        self.assertEqual(loaded.event_id, "event-1")
-        self.assertEqual(loaded.event_type, DiagnosticEvent.EVENT_TYPE_STUCK)
-        self.assertEqual(loaded.status, DiagnosticEvent.STATUS_PENDING)
-        self.assertEqual(loaded.detail, {"reason": "stuck"})
+        self.assertEqual(loaded.root_pipeline_id, "root-pipeline-1")
+        self.assertEqual(loaded.node_id, "node-1")
+        self.assertEqual(loaded.version, "v1")
+        self.assertEqual(loaded.schedule_id, 1)
+        self.assertEqual(loaded.callback_data_id, 2)
+        self.assertFalse(loaded.result)
+        self.assertEqual(loaded.reason, "node schedule timeout")
+        self.assertEqual(loaded.duration, 120.5)
+        self.assertEqual(loaded.engine_version, "3.24.10")
+        self.assertEqual(loaded.payload, {"doctor": "zombie"})
 
     def test_create_diagnostic_case(self):
-        event = DiagnosticEvent.objects.create(
-            event_id="event-2",
-            event_type=DiagnosticEvent.EVENT_TYPE_STUCK,
-            source="zombie_doctor",
-            pipeline_id="pipeline-2",
-            node_id="node-2",
-            process_id=2,
-            status=DiagnosticEvent.STATUS_PROCESSING,
-            detail={"reason": "stuck"},
-        )
+        first_seen_at = timezone.now()
         case = DiagnosticCase.objects.create(
-            case_id="case-1",
-            event=event,
-            pipeline_id="pipeline-2",
+            root_pipeline_id="root-pipeline-2",
             node_id="node-2",
-            process_id=2,
+            stuck_type="schedule_timeout",
             status=DiagnosticCase.STATUS_OPEN,
             severity=DiagnosticCase.SEVERITY_WARNING,
-            diagnosis={"matched": True},
-            suggestion={"operation": "retry"},
+            confidence=0.95,
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            hit_count=2,
+            evidence={"schedule_id": 11},
+            related_objects={"process_id": 22},
+            recommended_actions=["retry"],
+            forbidden_actions=["resume"],
+            message="schedule timeout detected",
         )
 
         loaded = DiagnosticCase.objects.get(id=case.id)
 
-        self.assertEqual(loaded.case_id, "case-1")
-        self.assertEqual(loaded.event_id, event.id)
+        self.assertEqual(loaded.root_pipeline_id, "root-pipeline-2")
+        self.assertEqual(loaded.node_id, "node-2")
+        self.assertEqual(loaded.stuck_type, "schedule_timeout")
         self.assertEqual(loaded.status, DiagnosticCase.STATUS_OPEN)
         self.assertEqual(loaded.severity, DiagnosticCase.SEVERITY_WARNING)
-        self.assertEqual(loaded.diagnosis, {"matched": True})
-        self.assertEqual(loaded.suggestion, {"operation": "retry"})
+        self.assertEqual(loaded.confidence, 0.95)
+        self.assertEqual(loaded.hit_count, 2)
+        self.assertEqual(loaded.evidence, {"schedule_id": 11})
+        self.assertEqual(loaded.related_objects, {"process_id": 22})
+        self.assertEqual(loaded.recommended_actions, ["retry"])
+        self.assertEqual(loaded.forbidden_actions, ["resume"])
+        self.assertEqual(loaded.message, "schedule timeout detected")
+        self.assertEqual(
+            [DiagnosticCase.STATUS_OPEN, DiagnosticCase.STATUS_RESOLVED, DiagnosticCase.STATUS_IGNORED],
+            ["open", "resolved", "ignored"],
+        )
 
     def test_create_diagnostic_operation_audit(self):
-        event = DiagnosticEvent.objects.create(
-            event_id="event-3",
-            event_type=DiagnosticEvent.EVENT_TYPE_STUCK,
-            source="zombie_doctor",
-            pipeline_id="pipeline-3",
-            node_id="node-3",
-            process_id=3,
-            status=DiagnosticEvent.STATUS_PROCESSED,
-            detail={"reason": "stuck"},
-        )
+        first_seen_at = timezone.now()
         case = DiagnosticCase.objects.create(
-            case_id="case-2",
-            event=event,
-            pipeline_id="pipeline-3",
+            root_pipeline_id="root-pipeline-3",
             node_id="node-3",
-            process_id=3,
-            status=DiagnosticCase.STATUS_HANDLED,
+            stuck_type="callback_lost",
+            status=DiagnosticCase.STATUS_RESOLVED,
             severity=DiagnosticCase.SEVERITY_CRITICAL,
-            diagnosis={"matched": True},
-            suggestion={"operation": "resume"},
+            confidence=0.8,
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
         )
         audit = DiagnosticOperationAudit.objects.create(
             case=case,
+            operation_type=DiagnosticOperationAudit.OPERATION_TYPE_RESUME,
+            target_object={"process_id": 3},
             operator="admin",
-            operation=DiagnosticOperationAudit.OPERATION_RESUME,
-            status=DiagnosticOperationAudit.STATUS_SUCCESS,
-            request={"dry_run": False},
+            mode=DiagnosticOperationAudit.MODE_APPLY,
+            precheck_result={"passed": True},
             result={"ok": True},
-            message="resume process",
+            risk_level=DiagnosticOperationAudit.RISK_LEVEL_HIGH,
+            payload={"ticket": "bk-1"},
         )
 
         loaded = DiagnosticOperationAudit.objects.get(id=audit.id)
 
         self.assertEqual(loaded.case_id, case.id)
+        self.assertEqual(loaded.operation_type, DiagnosticOperationAudit.OPERATION_TYPE_RESUME)
+        self.assertEqual(loaded.target_object, {"process_id": 3})
         self.assertEqual(loaded.operator, "admin")
-        self.assertEqual(loaded.operation, DiagnosticOperationAudit.OPERATION_RESUME)
-        self.assertEqual(loaded.status, DiagnosticOperationAudit.STATUS_SUCCESS)
-        self.assertEqual(loaded.request, {"dry_run": False})
+        self.assertEqual(loaded.mode, DiagnosticOperationAudit.MODE_APPLY)
+        self.assertEqual(loaded.precheck_result, {"passed": True})
         self.assertEqual(loaded.result, {"ok": True})
+        self.assertEqual(loaded.risk_level, DiagnosticOperationAudit.RISK_LEVEL_HIGH)
+        self.assertEqual(loaded.payload, {"ticket": "bk-1"})
+        self.assertEqual(
+            [DiagnosticOperationAudit.MODE_DRY_RUN, DiagnosticOperationAudit.MODE_APPLY],
+            ["dry_run", "apply"],
+        )

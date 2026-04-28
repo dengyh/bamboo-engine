@@ -3,6 +3,7 @@
 
 from django.db import migrations, models
 import django.db.models.deletion
+import django.utils.timezone
 import pipeline.contrib.diagnostics.models
 
 
@@ -15,59 +16,44 @@ class Migration(migrations.Migration):
             name="DiagnosticEvent",
             fields=[
                 ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("event_id", models.CharField(max_length=64, unique=True, verbose_name="诊断事件ID")),
+                ("root_pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="根 Pipeline ID")),
                 (
-                    "event_type",
-                    models.CharField(
-                        choices=[("stuck", "执行卡住"), ("exception", "执行异常")],
-                        db_index=True,
-                        max_length=32,
-                        verbose_name="诊断事件类型",
-                    ),
+                    "node_id",
+                    models.CharField(blank=True, db_index=True, default="", max_length=64, verbose_name="节点ID"),
                 ),
-                ("source", models.CharField(max_length=64, verbose_name="诊断来源")),
-                ("pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="Pipeline ID")),
-                ("node_id", models.CharField(blank=True, db_index=True, default="", max_length=64, verbose_name="节点ID")),
-                ("process_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="进程ID")),
+                ("version", models.CharField(blank=True, default="", max_length=64, verbose_name="节点版本")),
+                ("schedule_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="调度ID")),
                 (
-                    "status",
-                    models.CharField(
-                        choices=[("pending", "待处理"), ("processing", "处理中"), ("processed", "已处理"), ("ignored", "已忽略")],
-                        db_index=True,
-                        default="pending",
-                        max_length=32,
-                        verbose_name="处理状态",
-                    ),
+                    "callback_data_id",
+                    models.IntegerField(blank=True, db_index=True, null=True, verbose_name="回调数据ID"),
                 ),
-                ("detail", pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="诊断详情")),
+                ("result", models.BooleanField(blank=True, null=True, verbose_name="诊断结果")),
+                ("reason", models.TextField(blank=True, default="", verbose_name="诊断原因")),
+                ("duration", models.FloatField(blank=True, null=True, verbose_name="持续时间")),
+                (
+                    "engine_version",
+                    models.CharField(blank=True, default="", max_length=64, verbose_name="引擎版本"),
+                ),
+                (
+                    "payload",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="诊断载荷"),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="创建时间")),
-                ("updated_at", models.DateTimeField(auto_now=True, verbose_name="更新时间")),
             ],
             options={
                 "verbose_name": "Pipeline诊断事件",
                 "verbose_name_plural": "Pipeline诊断事件",
                 "ordering": ["-id"],
-                "index_together": {("pipeline_id", "node_id"), ("status", "created_at")},
+                "index_together": {("root_pipeline_id", "node_id"), ("schedule_id", "callback_data_id")},
             },
         ),
         migrations.CreateModel(
             name="DiagnosticCase",
             fields=[
                 ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("case_id", models.CharField(max_length=64, unique=True, verbose_name="诊断案例ID")),
-                ("pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="Pipeline ID")),
-                ("node_id", models.CharField(blank=True, db_index=True, default="", max_length=64, verbose_name="节点ID")),
-                ("process_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="进程ID")),
-                (
-                    "status",
-                    models.CharField(
-                        choices=[("open", "待治理"), ("handled", "已治理"), ("closed", "已关闭")],
-                        db_index=True,
-                        default="open",
-                        max_length=32,
-                        verbose_name="治理状态",
-                    ),
-                ),
+                ("root_pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="根 Pipeline ID")),
+                ("node_id", models.CharField(db_index=True, max_length=64, verbose_name="节点ID")),
+                ("stuck_type", models.CharField(db_index=True, max_length=64, verbose_name="卡住类型")),
                 (
                     "severity",
                     models.CharField(
@@ -78,40 +64,63 @@ class Migration(migrations.Migration):
                         verbose_name="严重级别",
                     ),
                 ),
+                ("confidence", models.FloatField(default=0.0, verbose_name="置信度")),
                 (
-                    "diagnosis",
-                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="诊断结论"),
-                ),
-                (
-                    "suggestion",
-                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="治理建议"),
-                ),
-                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="创建时间")),
-                ("updated_at", models.DateTimeField(auto_now=True, verbose_name="更新时间")),
-                (
-                    "event",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="cases",
-                        to="diagnostics.DiagnosticEvent",
-                        verbose_name="诊断事件",
+                    "status",
+                    models.CharField(
+                        choices=[("open", "待治理"), ("resolved", "已解决"), ("ignored", "已忽略")],
+                        db_index=True,
+                        default="open",
+                        max_length=32,
+                        verbose_name="治理状态",
                     ),
                 ),
+                (
+                    "first_seen_at",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, db_index=True, verbose_name="首次发现时间"
+                    ),
+                ),
+                (
+                    "last_seen_at",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, db_index=True, verbose_name="最近发现时间"
+                    ),
+                ),
+                ("hit_count", models.IntegerField(default=1, verbose_name="命中次数")),
+                (
+                    "evidence",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="证据"),
+                ),
+                (
+                    "related_objects",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="关联对象"),
+                ),
+                (
+                    "recommended_actions",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=list, verbose_name="推荐操作"),
+                ),
+                (
+                    "forbidden_actions",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=list, verbose_name="禁止操作"),
+                ),
+                ("message", models.TextField(blank=True, default="", verbose_name="诊断信息")),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="创建时间")),
+                ("updated_at", models.DateTimeField(auto_now=True, verbose_name="更新时间")),
             ],
             options={
                 "verbose_name": "Pipeline诊断案例",
                 "verbose_name_plural": "Pipeline诊断案例",
                 "ordering": ["-id"],
-                "index_together": {("pipeline_id", "node_id"), ("status", "severity")},
+                "index_together": {("root_pipeline_id", "node_id", "stuck_type", "status"), ("status", "severity")},
             },
         ),
         migrations.CreateModel(
             name="DiagnosticOperationAudit",
             fields=[
                 ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("operator", models.CharField(max_length=64, verbose_name="操作人")),
                 (
-                    "operation",
+                    "operation_type",
                     models.CharField(
                         choices=[("retry", "重试"), ("resume", "恢复"), ("ignore", "忽略")],
                         db_index=True,
@@ -120,24 +129,49 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "status",
+                    "target_object",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="操作对象"),
+                ),
+                ("operator", models.CharField(max_length=64, verbose_name="操作人")),
+                (
+                    "mode",
                     models.CharField(
-                        choices=[("success", "成功"), ("failed", "失败")],
+                        choices=[("dry_run", "预检查"), ("apply", "执行")],
                         db_index=True,
+                        default="dry_run",
                         max_length=32,
-                        verbose_name="操作状态",
+                        verbose_name="操作模式",
                     ),
                 ),
-                ("request", pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="操作请求")),
-                ("result", pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="操作结果")),
-                ("message", models.TextField(blank=True, default="", verbose_name="操作信息")),
+                (
+                    "precheck_result",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="预检查结果"),
+                ),
+                (
+                    "result",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="操作结果"),
+                ),
+                (
+                    "risk_level",
+                    models.CharField(
+                        choices=[("low", "低"), ("medium", "中"), ("high", "高")],
+                        db_index=True,
+                        default="low",
+                        max_length=32,
+                        verbose_name="风险级别",
+                    ),
+                ),
+                (
+                    "payload",
+                    pipeline.contrib.diagnostics.models.JSONTextField(default=dict, verbose_name="操作载荷"),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="创建时间")),
                 (
                     "case",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="operation_audits",
-                        to="diagnostics.DiagnosticCase",
+                        to="pipeline_diagnostics.DiagnosticCase",
                         verbose_name="诊断案例",
                     ),
                 ),
@@ -146,7 +180,7 @@ class Migration(migrations.Migration):
                 "verbose_name": "Pipeline诊断操作审计",
                 "verbose_name_plural": "Pipeline诊断操作审计",
                 "ordering": ["-id"],
-                "index_together": {("operator", "operation"), ("status", "created_at")},
+                "index_together": {("operator", "operation_type"), ("mode", "created_at")},
             },
         ),
     ]
