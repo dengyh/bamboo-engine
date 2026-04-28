@@ -32,12 +32,14 @@ class JSONTextField(models.TextField):
 
 
 class DiagnosticEvent(models.Model):
+    event_type = models.CharField(_("事件类型"), max_length=64, db_index=True)
     root_pipeline_id = models.CharField(_("根 Pipeline ID"), max_length=64, db_index=True)
     node_id = models.CharField(_("节点ID"), max_length=64, blank=True, default="", db_index=True)
+    process_id = models.IntegerField(_("进程ID"), null=True, blank=True, db_index=True)
     version = models.CharField(_("节点版本"), max_length=64, blank=True, default="")
     schedule_id = models.IntegerField(_("调度ID"), null=True, blank=True, db_index=True)
     callback_data_id = models.IntegerField(_("回调数据ID"), null=True, blank=True, db_index=True)
-    result = models.BooleanField(_("诊断结果"), null=True, blank=True)
+    result = models.CharField(_("事件结果"), max_length=32, blank=True, default="", db_index=True)
     reason = models.TextField(_("诊断原因"), blank=True, default="")
     duration = models.FloatField(_("持续时间"), null=True, blank=True)
     engine_version = models.CharField(_("引擎版本"), max_length=64, blank=True, default="")
@@ -49,7 +51,7 @@ class DiagnosticEvent(models.Model):
         verbose_name = _("Pipeline诊断事件")
         verbose_name_plural = _("Pipeline诊断事件")
         ordering = ["-id"]
-        index_together = (("root_pipeline_id", "node_id"), ("schedule_id", "callback_data_id"))
+        index_together = (("root_pipeline_id", "node_id"), ("event_type", "result"))
 
     def __unicode__(self):
         return "{}_{}_{}".format(self.root_pipeline_id, self.node_id, self.result)

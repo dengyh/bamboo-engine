@@ -26,12 +26,14 @@ class DiagnosticsModelTestCase(TransactionTestCase):
 
     def test_create_diagnostic_event(self):
         event = DiagnosticEvent.objects.create(
+            event_type="stuck",
             root_pipeline_id="root-pipeline-1",
             node_id="node-1",
+            process_id=1,
             version="v1",
             schedule_id=1,
             callback_data_id=2,
-            result=False,
+            result="failed",
             reason="node schedule timeout",
             duration=120.5,
             engine_version="3.24.10",
@@ -40,12 +42,14 @@ class DiagnosticsModelTestCase(TransactionTestCase):
 
         loaded = DiagnosticEvent.objects.get(id=event.id)
 
+        self.assertEqual(loaded.event_type, "stuck")
         self.assertEqual(loaded.root_pipeline_id, "root-pipeline-1")
         self.assertEqual(loaded.node_id, "node-1")
+        self.assertEqual(loaded.process_id, 1)
         self.assertEqual(loaded.version, "v1")
         self.assertEqual(loaded.schedule_id, 1)
         self.assertEqual(loaded.callback_data_id, 2)
-        self.assertFalse(loaded.result)
+        self.assertEqual(loaded.result, "failed")
         self.assertEqual(loaded.reason, "node schedule timeout")
         self.assertEqual(loaded.duration, 120.5)
         self.assertEqual(loaded.engine_version, "3.24.10")

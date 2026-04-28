@@ -16,18 +16,23 @@ class Migration(migrations.Migration):
             name="DiagnosticEvent",
             fields=[
                 ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("event_type", models.CharField(db_index=True, max_length=64, verbose_name="事件类型")),
                 ("root_pipeline_id", models.CharField(db_index=True, max_length=64, verbose_name="根 Pipeline ID")),
                 (
                     "node_id",
                     models.CharField(blank=True, db_index=True, default="", max_length=64, verbose_name="节点ID"),
                 ),
+                ("process_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="进程ID")),
                 ("version", models.CharField(blank=True, default="", max_length=64, verbose_name="节点版本")),
                 ("schedule_id", models.IntegerField(blank=True, db_index=True, null=True, verbose_name="调度ID")),
                 (
                     "callback_data_id",
                     models.IntegerField(blank=True, db_index=True, null=True, verbose_name="回调数据ID"),
                 ),
-                ("result", models.BooleanField(blank=True, null=True, verbose_name="诊断结果")),
+                (
+                    "result",
+                    models.CharField(blank=True, db_index=True, default="", max_length=32, verbose_name="事件结果"),
+                ),
                 ("reason", models.TextField(blank=True, default="", verbose_name="诊断原因")),
                 ("duration", models.FloatField(blank=True, null=True, verbose_name="持续时间")),
                 (
@@ -44,7 +49,7 @@ class Migration(migrations.Migration):
                 "verbose_name": "Pipeline诊断事件",
                 "verbose_name_plural": "Pipeline诊断事件",
                 "ordering": ["-id"],
-                "index_together": {("root_pipeline_id", "node_id"), ("schedule_id", "callback_data_id")},
+                "index_together": {("root_pipeline_id", "node_id"), ("event_type", "result")},
             },
         ),
         migrations.CreateModel(

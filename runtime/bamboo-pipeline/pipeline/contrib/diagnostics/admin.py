@@ -20,16 +20,18 @@ from .models import DiagnosticCase, DiagnosticEvent, DiagnosticOperationAudit
 class DiagnosticEventAdmin(admin.ModelAdmin):
     list_display = (
         "id",
+        "event_type",
         "root_pipeline_id",
         "node_id",
+        "process_id",
         "version",
         "schedule_id",
         "callback_data_id",
         "result",
         "created_at",
     )
-    search_fields = ("root_pipeline_id", "node_id", "reason")
-    list_filter = ("result", "engine_version")
+    search_fields = ("event_type", "root_pipeline_id", "node_id", "reason")
+    list_filter = ("event_type", "result", "engine_version")
 
 
 @admin.register(DiagnosticCase)
