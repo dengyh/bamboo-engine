@@ -5,7 +5,14 @@ from pipeline.eri.models import CallbackData, Process, Schedule, State
 
 
 def _sorted_by_id(items):
-    return sorted(items, key=lambda item: str(getattr(item, "id", "")))
+    def sort_key(item):
+        item_id = getattr(item, "id", "")
+        try:
+            return (0, int(item_id))
+        except (TypeError, ValueError):
+            return (1, str(item_id))
+
+    return sorted(items, key=sort_key)
 
 
 def _sorted_states(items):
@@ -44,12 +51,12 @@ def collect_runtime_snapshot(root_pipeline_id="", node_id="", process_id=None):
             node_id = node_id or seed_process.current_node_id
 
     process_queryset = Process.objects.all()
-    if root_pipeline_id:
-        process_queryset = process_queryset.filter(root_pipeline_id=root_pipeline_id)
-    elif process_id is not None:
+    if process_id is not None:
         process_queryset = process_queryset.filter(id=process_id)
+    elif root_pipeline_id:
+        process_queryset = process_queryset.filter(root_pipeline_id=root_pipeline_id)
 
-    if node_id:
+    if node_id and process_id is None:
         process_queryset = process_queryset.filter(current_node_id=node_id)
 
     processes = _sorted_by_id(process_queryset)

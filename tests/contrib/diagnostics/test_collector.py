@@ -60,8 +60,11 @@ class RuntimeSnapshotCollectorTestCase(TransactionTestCase):
         self.schedule_ids.append(schedule.id)
         return schedule
 
-    def _create_callback_data(self, node_id, version="v1", data="{}"):
-        callback_data = CallbackData.objects.create(node_id=node_id, version=version, data=data)
+    def _create_callback_data(self, node_id, version="v1", data="{}", callback_data_id=None):
+        kwargs = {"node_id": node_id, "version": version, "data": data}
+        if callback_data_id is not None:
+            kwargs["id"] = callback_data_id
+        callback_data = CallbackData.objects.create(**kwargs)
         self.callback_data_ids.append(callback_data.id)
         return callback_data
 
@@ -108,6 +111,34 @@ class RuntimeSnapshotCollectorTestCase(TransactionTestCase):
         self.assertEqual([item.node_id for item in snapshot.states], [state.node_id])
         self.assertEqual([item.id for item in snapshot.schedules], [schedule.id])
         self.assertEqual([item.id for item in snapshot.callback_data], [callback_data.id])
+
+    def test_collect_by_process_id_only_returns_that_process(self):
+        process_1 = self._create_process(51, root_pipeline_id="root-5", node_id="node-5")
+        process_2 = self._create_process(52, root_pipeline_id="root-5", node_id="node-5")
+        self._create_state("node-5", root_pipeline_id="root-5", version="v1")
+        schedule = self._create_schedule(51, process_1.id, "node-5", version="v1")
+        self._create_schedule(52, process_2.id, "node-5-v2", version="v1")
+
+        snapshot = collect_runtime_snapshot(process_id=process_1.id)
+
+        self.assertEqual(snapshot.root_pipeline_id, "root-5")
+        self.assertEqual(snapshot.node_id, "node-5")
+        self.assertEqual([item.id for item in snapshot.processes], [process_1.id])
+        self.assertEqual([item.id for item in snapshot.schedules], [schedule.id])
+
+    def test_collect_orders_integer_ids_numerically(self):
+        process_10 = self._create_process(10, root_pipeline_id="root-sort", node_id="node-sort-10")
+        process_2 = self._create_process(2, root_pipeline_id="root-sort", node_id="node-sort-2")
+        schedule_10 = self._create_schedule(10, process_10.id, "node-sort-10", version="v1")
+        schedule_2 = self._create_schedule(2, process_2.id, "node-sort-2", version="v1")
+        callback_data_10 = self._create_callback_data("node-sort-10", version="v1", callback_data_id=10)
+        callback_data_2 = self._create_callback_data("node-sort-2", version="v1", callback_data_id=2)
+
+        snapshot = collect_runtime_snapshot(root_pipeline_id="root-sort")
+
+        self.assertEqual([item.id for item in snapshot.processes], [process_2.id, process_10.id])
+        self.assertEqual([item.id for item in snapshot.schedules], [schedule_2.id, schedule_10.id])
+        self.assertEqual([item.id for item in snapshot.callback_data], [callback_data_2.id, callback_data_10.id])
 
     def test_collect_by_node_filters_root_evidence_to_current_node(self):
         process_1 = self._create_process(41, root_pipeline_id="root-4", node_id="node-4-a")
