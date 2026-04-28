@@ -174,7 +174,9 @@ class Migration(migrations.Migration):
                 (
                     "case",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
                         related_name="operation_audits",
                         to="pipeline_diagnostics.DiagnosticCase",
                         verbose_name="诊断案例",

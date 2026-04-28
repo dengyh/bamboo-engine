@@ -40,7 +40,7 @@ def emit_event(
             version=version,
             result=result,
             reason=reason,
-            payload=payload or {},
+            payload={} if payload is None else payload,
             process_id=kwargs.get("process_id"),
             schedule_id=kwargs.get("schedule_id"),
             callback_data_id=kwargs.get("callback_data_id"),

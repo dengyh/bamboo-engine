@@ -27,6 +27,12 @@ class DiagnosticsCleanupTestCase(DiagnosticsTestCase):
             stuck_type="schedule_timeout",
             status=DiagnosticCase.STATUS_RESOLVED,
         )
+        recent_audit_on_old_resolved_case = DiagnosticOperationAudit.objects.create(
+            case=old_resolved_case,
+            operation_type="custom",
+            operator="admin",
+            mode=DiagnosticOperationAudit.MODE_APPLY,
+        )
         recent_ignored_case = DiagnosticCase.objects.create(
             root_pipeline_id="root-pipeline-5",
             node_id="node-5",
@@ -72,6 +78,8 @@ class DiagnosticsCleanupTestCase(DiagnosticsTestCase):
         self.assertTrue(DiagnosticCase.objects.filter(id=old_open_case.id).exists())
         self.assertFalse(DiagnosticCase.objects.filter(id=old_resolved_case.id).exists())
         self.assertTrue(DiagnosticCase.objects.filter(id=recent_ignored_case.id).exists())
+        self.assertTrue(DiagnosticOperationAudit.objects.filter(id=recent_audit_on_old_resolved_case.id).exists())
+        self.assertIsNone(DiagnosticOperationAudit.objects.get(id=recent_audit_on_old_resolved_case.id).case_id)
         self.assertFalse(DiagnosticOperationAudit.objects.filter(id=old_audit.id).exists())
         self.assertTrue(DiagnosticOperationAudit.objects.filter(id=recent_audit.id).exists())
         self.assertIn("DiagnosticEvent deleted: 1", stdout.getvalue())

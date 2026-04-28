@@ -143,7 +143,12 @@ class DiagnosticOperationAudit(models.Model):
     )
 
     case = models.ForeignKey(
-        DiagnosticCase, verbose_name=_("诊断案例"), related_name="operation_audits", on_delete=models.CASCADE
+        DiagnosticCase,
+        verbose_name=_("诊断案例"),
+        related_name="operation_audits",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
     )
     operation_type = models.CharField(_("操作类型"), max_length=64, db_index=True)
     target_object = JSONTextField(_("操作对象"), default=dict)
@@ -165,4 +170,4 @@ class DiagnosticOperationAudit(models.Model):
         index_together = (("operator", "operation_type"), ("mode", "created_at"))
 
     def __unicode__(self):
-        return "{}_{}_{}".format(self.case_id, self.operation_type, self.mode)
+        return "{}_{}_{}".format(self.case_id or "", self.operation_type, self.mode)

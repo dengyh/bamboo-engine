@@ -62,3 +62,10 @@ class DiagnosticsEventTestCase(DiagnosticsTestCase):
         loaded = DiagnosticEvent.objects.get(id=event.id)
 
         self.assertEqual(loaded.payload, {})
+
+    def test_emit_event_preserves_falsy_payload(self):
+        event = emit_event(event_type="stuck", root_pipeline_id="root-pipeline-1", payload=[])
+
+        loaded = DiagnosticEvent.objects.get(id=event.id)
+
+        self.assertEqual(loaded.payload, [])
