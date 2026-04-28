@@ -1,41 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from django.db import connection
-from django.test import TransactionTestCase
 from django.utils import timezone
 
 from pipeline.contrib.diagnostics.models import DiagnosticCase, DiagnosticEvent, DiagnosticOperationAudit
+from tests.contrib.diagnostics.base import DiagnosticsTestCase
 
 
-class DiagnosticsModelTestCase(TransactionTestCase):
-    @classmethod
-    def setUpClass(cls):
-        super(DiagnosticsModelTestCase, cls).setUpClass()
-        cls._created_models = []
-        try:
-            with connection.schema_editor() as schema_editor:
-                existing_tables = connection.introspection.table_names()
-                for model in (DiagnosticEvent, DiagnosticCase, DiagnosticOperationAudit):
-                    if model._meta.db_table not in existing_tables:
-                        schema_editor.create_model(model)
-                        cls._created_models.append(model)
-        except Exception:
-            cls._delete_created_models()
-            raise
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._delete_created_models()
-        super(DiagnosticsModelTestCase, cls).tearDownClass()
-
-    @classmethod
-    def _delete_created_models(cls):
-        with connection.schema_editor() as schema_editor:
-            for model in reversed(getattr(cls, "_created_models", [])):
-                if model._meta.db_table in connection.introspection.table_names():
-                    schema_editor.delete_model(model)
-        cls._created_models = []
-
+class DiagnosticsModelTestCase(DiagnosticsTestCase):
     def test_create_diagnostic_event(self):
         event = DiagnosticEvent.objects.create(
             event_type="stuck",
