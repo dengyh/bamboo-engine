@@ -126,6 +126,38 @@ class RuntimeSnapshotCollectorTestCase(TransactionTestCase):
         self.assertEqual([item.id for item in snapshot.processes], [process_1.id])
         self.assertEqual([item.id for item in snapshot.schedules], [schedule.id])
 
+    def test_collect_by_missing_process_id_returns_empty_snapshot(self):
+        self._create_state("input-node", root_pipeline_id="input-root", version="v1")
+        self._create_callback_data("input-node", version="v1")
+
+        snapshot = collect_runtime_snapshot(
+            root_pipeline_id="input-root",
+            node_id="input-node",
+            process_id=404,
+        )
+
+        self.assertEqual(snapshot.root_pipeline_id, "input-root")
+        self.assertEqual(snapshot.node_id, "input-node")
+        self.assertEqual(snapshot.process_id, 404)
+        self.assertEqual(snapshot.processes, [])
+        self.assertEqual(snapshot.states, [])
+        self.assertEqual(snapshot.schedules, [])
+        self.assertEqual(snapshot.callback_data, [])
+
+    def test_collect_without_scope_returns_empty_snapshot(self):
+        self._create_state("node-no-scope", root_pipeline_id="root-no-scope", version="v1")
+        self._create_callback_data("node-no-scope", version="v1")
+
+        snapshot = collect_runtime_snapshot()
+
+        self.assertEqual(snapshot.root_pipeline_id, "")
+        self.assertEqual(snapshot.node_id, "")
+        self.assertIsNone(snapshot.process_id)
+        self.assertEqual(snapshot.processes, [])
+        self.assertEqual(snapshot.states, [])
+        self.assertEqual(snapshot.schedules, [])
+        self.assertEqual(snapshot.callback_data, [])
+
     def test_collect_orders_integer_ids_numerically(self):
         process_10 = self._create_process(10, root_pipeline_id="root-sort", node_id="node-sort-10")
         process_2 = self._create_process(2, root_pipeline_id="root-sort", node_id="node-sort-2")

@@ -36,6 +36,18 @@ def _unique(values):
     return result
 
 
+def _empty_snapshot(root_pipeline_id, node_id, process_id):
+    return RuntimeSnapshot(
+        root_pipeline_id=root_pipeline_id,
+        node_id=node_id,
+        process_id=process_id,
+        processes=[],
+        states=[],
+        schedules=[],
+        callback_data=[],
+    )
+
+
 def collect_runtime_snapshot(root_pipeline_id="", node_id="", process_id=None):
     """
     Collect a read-only runtime snapshot for diagnostics rules and commands.
@@ -44,11 +56,15 @@ def collect_runtime_snapshot(root_pipeline_id="", node_id="", process_id=None):
     node_id = node_id or ""
     seed_process = None
 
+    if not root_pipeline_id and not node_id and process_id is None:
+        return _empty_snapshot(root_pipeline_id, node_id, process_id)
+
     if process_id is not None:
         seed_process = Process.objects.filter(id=process_id).first()
-        if seed_process is not None:
-            root_pipeline_id = root_pipeline_id or seed_process.root_pipeline_id
-            node_id = node_id or seed_process.current_node_id
+        if seed_process is None:
+            return _empty_snapshot(root_pipeline_id, node_id, process_id)
+        root_pipeline_id = root_pipeline_id or seed_process.root_pipeline_id
+        node_id = node_id or seed_process.current_node_id
 
     process_queryset = Process.objects.all()
     if process_id is not None:
@@ -63,15 +79,16 @@ def collect_runtime_snapshot(root_pipeline_id="", node_id="", process_id=None):
     process_ids = [process.id for process in processes]
     process_node_ids = [process.current_node_id for process in processes]
 
-    state_queryset = State.objects.all()
-    if root_pipeline_id:
-        state_queryset = state_queryset.filter(root_id=root_pipeline_id)
-    if node_id:
-        state_queryset = state_queryset.filter(node_id=node_id)
-    elif process_node_ids:
-        state_queryset = state_queryset.filter(node_id__in=process_node_ids)
-
-    states = _sorted_states(state_queryset)
+    states = []
+    if root_pipeline_id or node_id or process_node_ids:
+        state_queryset = State.objects.all()
+        if root_pipeline_id:
+            state_queryset = state_queryset.filter(root_id=root_pipeline_id)
+        if node_id:
+            state_queryset = state_queryset.filter(node_id=node_id)
+        elif process_node_ids:
+            state_queryset = state_queryset.filter(node_id__in=process_node_ids)
+        states = _sorted_states(state_queryset)
 
     candidate_node_ids = _unique(
         ([node_id] if node_id else [])
