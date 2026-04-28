@@ -7,7 +7,7 @@ from pipeline.contrib.diagnostics.rules import diagnose_snapshot
 from pipeline.eri.models import Process
 
 
-def diagnose_pipeline(root_pipeline_id, node_id="", process_id=None):
+def diagnose_pipeline(root_pipeline_id="", node_id="", process_id=None):
     snapshot = collect_runtime_snapshot(root_pipeline_id=root_pipeline_id, node_id=node_id, process_id=process_id)
     return diagnose_snapshot(snapshot)
 

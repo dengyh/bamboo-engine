@@ -35,6 +35,12 @@ class DiagnosticCaseUpsertTestCase(DiagnosticsTestCase):
         self.assertEqual(loaded.message, "second")
         self.assertEqual(loaded.evidence, {"node_id": "node-case", "schedule_id": 1})
 
+    def test_upsert_normalizes_empty_root_and_node(self):
+        case = upsert_case(None, None, self._hit())
+
+        self.assertEqual(case.root_pipeline_id, "")
+        self.assertEqual(case.node_id, "")
+
     def test_resolved_or_ignored_case_does_not_block_new_open_case(self):
         resolved = upsert_case("root-case", "node-case", self._hit())
         DiagnosticCase.objects.filter(id=resolved.id).update(status=DiagnosticCase.STATUS_RESOLVED)

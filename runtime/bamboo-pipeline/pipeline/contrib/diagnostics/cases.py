@@ -57,6 +57,8 @@ def upsert_case(root_pipeline_id, node_id, hit):
     if not conf.case_enabled():
         return None
 
+    root_pipeline_id = root_pipeline_id or ""
+    node_id = node_id or ""
     now = timezone.now()
     lookup = {
         "root_pipeline_id": root_pipeline_id,

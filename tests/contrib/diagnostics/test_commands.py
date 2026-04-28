@@ -8,6 +8,7 @@ from django.test import override_settings
 from pipeline.contrib.diagnostics.management.commands.diagnose_pipeline import Command as DiagnoseCommand
 from pipeline.contrib.diagnostics.management.commands.scan_stuck_cases import Command as ScanCommand
 from pipeline.contrib.diagnostics.models import DiagnosticCase
+from pipeline.contrib.diagnostics.scanner import diagnose_pipeline
 from pipeline.eri.models import Process, Schedule, State
 from tests.contrib.diagnostics.base import DiagnosticsTestCase
 
@@ -79,6 +80,28 @@ class DiagnosticsCommandTestCase(DiagnosticsTestCase):
 
         self.assertEqual(payload[0]["type"], "schedule_lock_stuck")
         self.assertEqual(payload[0]["related_objects"]["node_id"], "node-command")
+
+    def test_scanner_diagnose_pipeline_supports_process_id_only(self):
+        process = self._create_process(205, root_pipeline_id="root-process-only", node_id="node-process-only")
+        self._create_state("node-process-only", root_pipeline_id="root-process-only")
+        self._create_schedule(205, process.id, "node-process-only")
+
+        hits = diagnose_pipeline(process_id=process.id)
+
+        self.assertEqual([hit.type for hit in hits], ["schedule_lock_stuck"])
+        self.assertEqual(hits[0].related_objects["node_id"], "node-process-only")
+
+    def test_diagnose_pipeline_command_supports_process_id_only(self):
+        process = self._create_process(206, root_pipeline_id="root-command-process", node_id="node-command-process")
+        self._create_state("node-command-process", root_pipeline_id="root-command-process")
+        self._create_schedule(206, process.id, "node-command-process")
+
+        stdout = StringIO()
+        DiagnoseCommand(stdout=stdout).handle(root_pipeline_id="", node_id="", process_id=process.id)
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload[0]["type"], "schedule_lock_stuck")
+        self.assertEqual(payload[0]["related_objects"]["node_id"], "node-command-process")
 
     def test_scan_stuck_cases_upserts_case(self):
         process = self._create_process(202, root_pipeline_id="root-scan", node_id="node-scan")
