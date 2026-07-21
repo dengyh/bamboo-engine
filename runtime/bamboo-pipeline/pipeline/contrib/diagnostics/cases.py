@@ -77,3 +77,12 @@ def upsert_case(root_pipeline_id, node_id, hit):
         with transaction.atomic():
             case = DiagnosticCase.objects.select_for_update().get(**lookup)
             return _apply_hit(case, hit, now)
+
+
+def close_stale_cases(active_root_ids):
+    """把不在本轮确认停滞集合中的 open 案例置 resolved（root 已恢复/结束）。"""
+    now = timezone.now()
+    qs = DiagnosticCase.objects.filter(status=DiagnosticCase.STATUS_OPEN).exclude(
+        root_pipeline_id__in=list(active_root_ids)
+    )
+    return qs.update(status=DiagnosticCase.STATUS_RESOLVED, last_seen_at=now, updated_at=now)
