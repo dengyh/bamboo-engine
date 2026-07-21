@@ -79,10 +79,21 @@ def upsert_case(root_pipeline_id, node_id, hit):
             return _apply_hit(case, hit, now)
 
 
-def close_stale_cases(active_root_ids):
-    """把不在本轮确认停滞集合中的 open 案例置 resolved（root 已恢复/结束）。"""
-    now = timezone.now()
-    qs = DiagnosticCase.objects.filter(status=DiagnosticCase.STATUS_OPEN).exclude(
-        root_pipeline_id__in=list(active_root_ids)
-    )
-    return qs.update(status=DiagnosticCase.STATUS_RESOLVED, last_seen_at=now, updated_at=now)
+def close_stale_cases(threshold_seconds, now=None):
+    """Resolve open cases whose root recovered (progressed within threshold) or has no live process."""
+    from pipeline.contrib.diagnostics.progress import root_last_progress, stall_cutoff
+
+    cutoff = stall_cutoff(threshold_seconds, now=now)
+    now_dt = now or timezone.now()
+    resolved_ids = []
+    for case in DiagnosticCase.objects.filter(status=DiagnosticCase.STATUS_OPEN).iterator():
+        latest = root_last_progress(case.root_pipeline_id)
+        if latest is None or latest >= cutoff:
+            resolved_ids.append(case.id)
+    if resolved_ids:
+        DiagnosticCase.objects.filter(id__in=resolved_ids).update(
+            status=DiagnosticCase.STATUS_RESOLVED,
+            last_seen_at=now_dt,
+            updated_at=now_dt,
+        )
+    return len(resolved_ids)

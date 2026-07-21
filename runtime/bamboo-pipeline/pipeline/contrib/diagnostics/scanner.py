@@ -64,9 +64,7 @@ def scan_stalled_roots(threshold_seconds=None, batch=None, confirm_seconds=None,
 
     now_dt = now or timezone.now()
     cases = []
-    confirmed_root_ids = set()
     for root_pipeline_id, latest in confirmed:
-        confirmed_root_ids.add(root_pipeline_id)
         stall_seconds = int((now_dt - latest).total_seconds())
         snapshot = collect_runtime_snapshot(root_pipeline_id=root_pipeline_id)
         for hit in diagnose_snapshot(snapshot, stall_seconds=stall_seconds):
@@ -75,5 +73,5 @@ def scan_stalled_roots(threshold_seconds=None, batch=None, confirm_seconds=None,
             if case is not None:
                 cases.append(case)
 
-    close_stale_cases(active_root_ids=confirmed_root_ids)
+    close_stale_cases(threshold_seconds, now=now)
     return cases
