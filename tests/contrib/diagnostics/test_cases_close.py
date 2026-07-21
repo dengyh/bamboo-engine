@@ -68,3 +68,32 @@ class CloseStaleCasesTest(DiagnosticsTestCase):
             status=DiagnosticCase.STATUS_RESOLVED,
         )
         self.assertEqual(cases.close_stale_cases(threshold_seconds=1800), 0)
+
+    def test_reclose_after_recurrence_does_not_raise(self):
+        # 1) 首次停滞并立案
+        self._proc("root-recur", beat_delta=3600)
+        self._open_case("root-recur")
+        # 2) 恢复 -> resolve
+        Process.objects.filter(root_pipeline_id="root-recur").update(last_heartbeat=timezone.now())
+        self.assertEqual(cases.close_stale_cases(threshold_seconds=1800), 1)
+        # 3) 同 root/node/type 再次停滞 -> 新 open 行
+        Process.objects.filter(root_pipeline_id="root-recur").update(
+            last_heartbeat=timezone.now() - timedelta(seconds=3600)
+        )
+        self._open_case("root-recur")
+        # 4) 再次恢复 -> 必须能关闭且不抛 IntegrityError
+        Process.objects.filter(root_pipeline_id="root-recur").update(last_heartbeat=timezone.now())
+        closed = cases.close_stale_cases(threshold_seconds=1800)
+        self.assertEqual(closed, 1)
+        self.assertEqual(
+            DiagnosticCase.objects.filter(
+                root_pipeline_id="root-recur", status=DiagnosticCase.STATUS_RESOLVED
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            DiagnosticCase.objects.filter(
+                root_pipeline_id="root-recur", status=DiagnosticCase.STATUS_OPEN
+            ).count(),
+            0,
+        )
